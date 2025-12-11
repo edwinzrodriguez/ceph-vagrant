@@ -87,7 +87,7 @@ preflight Ansible playbook:
 ```bash
 vagrant ssh ceph-admin
 cd /usr/share/cephadm-ansible/
-ansible-playbook -i inventory/production/hosts cephadm-preflight.yml --extra-vars "ceph_origin=ibm"
+ansible-playbook -i inventory/production/hosts cephadm-preflight.yml --extra-vars "ceph_origin=community"
 ```
 
 For the next step you need to set the environment variables again on the
@@ -101,7 +101,7 @@ export IBM_CR_PASSWORD='<your IBM Container Registry Entitlement key>'
 Then you can continue with bootstrapping the cluster:
 
 ```bash
-sudo cephadm bootstrap --cluster-network 172.21.12.0/24 --mon-ip 172.21.12.10 --registry-url cp.icr.io/cp --registry-username $IBM_CR_USERNAME  --registry-password $IBM_CR_PASSWORD
+sudo cephadm bootstrap --cluster-network 172.21.13.0/24 --mon-ip 172.21.13.10 
 ssh-copy-id -f -i /etc/ceph/ceph.pub root@ceph-server-1
 ssh-copy-id -f -i /etc/ceph/ceph.pub root@ceph-server-2
 ssh-copy-id -f -i /etc/ceph/ceph.pub root@ceph-server-3
@@ -120,8 +120,13 @@ is the one you noted above as `cephadm bootstrap` output.
 - activate telemetry module. See the warning on top of the screen after logging
 in.
 - add nodes using Cluster->Hosts->Add. Use ceph-server-1 with IP
-172.21.12.12, ceph-server-2 with IP 172.21.12.13, ceph-server-3
-with IP 172.21.12.14.
+172.21.13.12, ceph-server-2 with IP 172.21.13.13, ceph-server-3
+with IP 172.21.13.14.
+```bash
+sudo ceph orch host add ceph-server-1 172.21.13.12
+sudo ceph orch host add ceph-server-2 172.21.13.13
+sudo ceph orch host add ceph-server-3 172.21.13.14
+```
 - add OSDs. Please wait until all ceph-server nodes are active, this might take
 up to 10 minutes. When active, Cluster->Hosts shows mon service instances on
 all nodes. Add OSDs via Cluster->OSDs->Create.

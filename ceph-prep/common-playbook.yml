@@ -17,10 +17,10 @@
       ansible.builtin.dnf:
         autoremove: yes
 
-    # - name: Download ceph-tools repository
-    #   ansible.builtin.uri:
-    #     url: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo
-    #     dest: /etc/yum.repos.d/ibm-storage-ceph-8-rhel-9.repo
+    - name: Download ceph-tools repository
+      ansible.builtin.uri:
+        url: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo
+        dest: /etc/yum.repos.d/ibm-storage-ceph-8-rhel-9.repo
 
     # - name: Disable all RHSM repositories
     #   community.general.rhsm_repository:
@@ -33,16 +33,6 @@
     #       - rhel-9-for-x86_64-baseos-rpms
     #       - rhel-9-for-x86_64-appstream-rpms
     #     state: enabled
-
-    # - name: Install license package (most likely already installed)
-    #   ansible.builtin.dnf:
-    #     name: "ibm-storage-ceph-license"
-    #     state: latest
-
-    # - name: Accept license conditions
-    #   ansible.builtin.file:
-    #     name: "/usr/share/ibm-storage-ceph-license/accept"
-    #     state: touch
 
     - name: Key exchange, part 1
       ansible.builtin.copy:

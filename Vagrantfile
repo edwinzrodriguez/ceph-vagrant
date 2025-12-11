@@ -2,13 +2,14 @@
 # Based on vagrant-rhel8 code - Copyright (c) 2019 Andrew Garner
 
 ### Some parameters that can be adjusted
+# ansible.compatibility_mode = "auto"
 
 # Number of ceph-server nodes. If you change the default number of 3 you
 # need to adjust the ceph-prep/config and ceph-prep/hosts files accordingly.
 N = 3
 
 # The libvirt storage pool to use
-STORAGE_POOL = "default"
+STORAGE_POOL = "cephpool"
 
 # Amount of Memory (RAM) per node. 8192 is recommended, but 3072 works as well.
 RAM_SIZE = 8192
@@ -16,14 +17,21 @@ RAM_SIZE = 8192
 # IP prefix and start address for the VMs
 # The ceph-admin node will get IP_PREFIX.IPSTART (default: 172.21.12.10)
 # The ceph-client and ceph-server-x nodes will get subsequent addresses.
-IP_PREFIX = "172.21.12."
+IP_PREFIX = "172.21.13."
 IP_START = 10
+
+# VMware OSD disk configuration (can be overridden via environment variables)
+# Example: OSD_DISK_SIZE=100G OSD_DISK_COUNT=2 vagrant up
+OSD_DISK_SIZE = ENV['OSD_DISK_SIZE'] || '50G'
+OSD_DISK_COUNT = (ENV['OSD_DISK_COUNT'] || '1').to_i
 
 ### Do not modify the code below unless you are developing
 
 Vagrant.require_version ">= 2.1.0" # 2.1.0 minimum required for triggers
 
-ENV['VAGRANT_DEFAULT_PROVIDER'] = 'vmware_desktop'
+# ENV['VAGRANT_DEFAULT_PROVIDER'] = 'vmware_desktop'
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'libvirt'
+
 user = "vagrant"
 password = "vagrant"
 
@@ -33,8 +41,9 @@ timedatectl set-timezone Europe/Berlin
 }
 
 Vagrant.configure("2") do |config|
-  # config.vm.box = "roboxes/centos9s"
-  config.vm.box = "edrodrig/centos10s"
+  config.vm.box = "roboxes/centos9s"
+  # config.vm.box = "edrodrig/centos10s"
+  # config.vm.box = "edrodrig/centos9s"
 
   config.vm.provider :libvirt do |libvirt|
     # Do not use (user) session libvirt - VM networks will not work there on Fedora!
@@ -44,17 +53,21 @@ Vagrant.configure("2") do |config|
     libvirt.disk_bus = "virtio"
     libvirt.storage_pool_name = STORAGE_POOL
     # To avoid USB device resource conflicts
-    libvirt.graphics_type = "spice"
-    (1..2).each do
-      libvirt.redirdev :type => "spicevmc"
-    end
+    libvirt.graphics_type = "vnc"
+    libvirt.video_type = "virtio"
+
+    # (1..2).each do
+    #   libvirt.redirdev :type => "spicevmc"
+    # end
   end
   
 # === VMware Desktop provider (Fusion on macOS, Workstation/Pro on Linux/Windows) ===
   config.vm.provider "vmware_desktop" do |vmware, override|
     # Use a VMware-compatible box if the default roboxes/rhel9 does not have a vmware version
     # (Vagrant will automatically download the vmware_desktop version when needed)
-    override.vm.box = "edrodrig/centos10s"   # works because roboxes publishes vmware_desktop versions too
+    # override.vm.box = "edrodrig/centos10s"   # works because roboxes publishes vmware_desktop versions too
+    # override.vm.box = "roboxes/centos9s"   # works because roboxes publishes vmware_desktop versions too
+    override.vm.box = "edrodrig/centos9s"   # works because roboxes publishes vmware_desktop versions too
 
     vmware.cpus = 2
     vmware.memory = RAM_SIZE             # respects the RAM_SIZE variable (8192 by default)
@@ -65,9 +78,12 @@ Vagrant.configure("2") do |config|
 
     # Add the same number and size of extra disks that libvirt adds for OSDs
     # Only applied to ceph-server-* machines (same logic as the libvirt block)
-    vmware.vmx["scsi0:1.present"] = "TRUE"
-    vmware.vmx["scsi0:1.filename"] = "disk-1.vmdk"
-    vmware.vmx["scsi0:1.virtualSSD"] = "1"   # treat as SSD for better performance
+    # Create scsi disk vmx entries for each configured OSD disk
+    (1..OSD_DISK_COUNT).each do |d|
+      vmware.vmx["scsi0:#{d}.present"] = "TRUE"
+      vmware.vmx["scsi0:#{d}.filename"] = "disk-#{d}.vmdk"
+      vmware.vmx["scsi0:#{d}.virtualSSD"] = "1"   # treat as SSD for better performance
+    end
   end
 
   config.ssh.forward_agent = true
@@ -113,8 +129,15 @@ Vagrant.configure("2") do |config|
       # Attach disks for Ceph OSDs
 # ---- VMware extra disk(s) for OSDs ----
       server.vm.provider "vmware_desktop" do |vmware|
-        num = 1
-        (1..num).each do |d|
+        # Create the configured number of OSD disks for this server using
+        # the OSD_DISK_COUNT and OSD_DISK_SIZE values.
+        (1..OSD_DISK_COUNT).each do |d|
+          # vmware.storage :file, :size => OSD_DISK_SIZE, :cache => 'none'
+
+          # Optional: if you want per-server named vmdk files, uncomment and
+          # adapt the block below. The creation/attachment semantics differ
+          # between providers so the simple vmware.storage call above is used
+          # for reliable automatic creation.
           disk_file = "ceph-server-#{i}-disk#{d}.vmdk"
           unless File.exist?(disk_file)
             vmware.vmx["scsi0:#{d}.present"] = "TRUE"
@@ -122,14 +145,14 @@ Vagrant.configure("2") do |config|
             vmware.vmx["scsi0:#{d}.virtualSSD"] = "1"
           end
         end
-      end  
+      end
 
 # ---- libvirt extra disk(s) for OSDs ----    
       server.vm.provider "libvirt" do |libvirt|
-        # 1 small disk
-        num = 1
-        (1..num).each do |disk|
-          libvirt.storage :file, :size => '5G', :cache => 'none'
+        # Create the configured number of OSD disks for this server using
+        # the OSD_DISK_COUNT and OSD_DISK_SIZE values.
+        (1..OSD_DISK_COUNT).each do |disk|
+          libvirt.storage :file, :size => OSD_DISK_SIZE, :cache => 'none'
         end
       end
       server.vm.provision "shell", inline: timezone_script
